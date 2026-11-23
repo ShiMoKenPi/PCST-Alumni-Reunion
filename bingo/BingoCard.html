@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ポケモンビンゴ</title>
+<style>
+:root{--bg:#fff7e6;--card:#fff;--ink:#2b2b3a;--sub:#7a7a8c;--accent:#e8453c;--cell:#fffdf6;--line:#f0d9a8;--glow:#ffb400;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171722;--card:#22222f;--ink:#f2f2f7;--sub:#9a9ab0;--cell:#2b2b3a;--line:#3a3a4e}}
+:root[data-theme="dark"]{--bg:#171722;--card:#22222f;--ink:#f2f2f7;--sub:#9a9ab0;--cell:#2b2b3a;--line:#3a3a4e}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;min-height:100%;padding:12px;max-width:480px;margin:0 auto}
+h1{font-size:18px;margin:4px 0 2px;text-align:center}
+.sub{font-size:12px;color:var(--sub);text-align:center;margin-bottom:10px}
+
+/* 最新の抽選結果 */
+.latest{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:12px;padding:6px 12px;margin-bottom:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);min-height:52px}
+.latest[hidden]{display:none}
+.latest .lb{font-size:11px;color:var(--sub)}
+.latest .lno{font-size:18px;font-weight:800;color:var(--accent)}
+.latest img{width:44px;height:44px;object-fit:contain}
+.latest .lc{margin-left:auto;font-size:12px;color:var(--sub);white-space:nowrap}
+
+/* ビンゴカード */
+.board{background:var(--card);border-radius:16px;padding:8px;display:grid;grid-template-columns:repeat(5,1fr);gap:5px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-height:60px}
+.cell{aspect-ratio:1;background:var(--cell);border:2px solid var(--line);border-radius:10px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:default;user-select:none;-webkit-user-select:none}
+.cell .no{position:absolute;top:2px;left:4px;font-size:9px;color:var(--sub);z-index:1}
+.cell .pic{width:82%;height:82%;object-fit:contain;pointer-events:none;transition:opacity .25s,filter .25s}
+.cell .face{width:62%;aspect-ratio:1;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px;transition:opacity .25s,filter .25s}
+.cell.can{border-color:var(--glow);animation:pulse 1s infinite;cursor:pointer}
+.cell.fresh{animation:fresh .9s ease-out 2}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,180,0,.7)}50%{box-shadow:0 0 0 6px rgba(255,180,0,0)}}
+@keyframes fresh{0%{transform:scale(1)}30%{transform:scale(1.1);box-shadow:0 0 16px rgba(255,180,0,.95)}100%{transform:scale(1)}}
+.cell.free{background:linear-gradient(135deg,#ffd54a,#ff8a3d);border-color:#ff8a3d;color:#fff;font-weight:800;font-size:13px}
+
+/* 穴あけ：ポケモンが見えるように、真ん中に小さめの穴＋画像を少し暗く */
+.hole{display:none;position:absolute;inset:34%;border-radius:50%;background:radial-gradient(circle at 40% 35%,#000 0,#111 55%,#333 100%);box-shadow:inset 0 3px 8px #000,0 0 0 3px rgba(0,0,0,.25)}
+.cell.punched:not(.free) .hole{display:block}
+.cell.punched.anim .hole{animation:punch .45s cubic-bezier(.2,1.6,.4,1)}
+.cell.punched:not(.free) .pic,.cell.punched:not(.free) .face{opacity:.5;filter:grayscale(.4)}
+@keyframes punch{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+.cell.win{border-color:var(--accent);box-shadow:0 0 12px var(--accent)}
+
+.stat{display:flex;justify-content:space-between;font-size:13px;margin:10px 4px 2px}
+.badge{font-weight:700;color:var(--accent)}
+.note{font-size:11px;color:var(--sub);text-align:right;margin:0 4px;min-height:16px}
+.note.err{color:var(--accent)}
+
+.sim{margin-top:14px;padding:10px;border:1px dashed var(--line);border-radius:12px;font-size:12px;color:var(--sub)}
+.sim[hidden]{display:none}
+.sim button{font:inherit;padding:6px 10px;margin:4px 4px 0 0;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.drawn{margin-top:6px;word-break:break-all}
+
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,30px);opacity:0;pointer-events:none;background:#2b2b3a;color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;font-weight:700;text-align:center;white-space:pre-line;width:max-content;max-width:92vw;transition:transform .25s,opacity .25s;z-index:9}
+#toast.on{transform:translate(-50%,0);opacity:1}
+#ov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:rgba(0,0,0,.55);z-index:10}
+#ov.on{display:flex}
+#ov h2{font-size:64px;margin:0;color:#ffd54a;text-shadow:0 4px 0 #e8453c,0 0 30px #fff;animation:pop 1s ease-out}
+#ov p{color:#fff;margin:8px 0 0;font-size:14px}
+@keyframes pop{0%{transform:scale(0) rotate(-20deg)}60%{transform:scale(1.3) rotate(6deg)}100%{transform:scale(1) rotate(0)}}
+canvas{position:fixed;inset:0;pointer-events:none;z-index:11}
+@media (prefers-reduced-motion:reduce){.cell.can,.cell.fresh,#ov h2{animation:none}}
+</style></head>
+<body>
+<h1>ポケモンビンゴ</h1>
+<div class="sub" id="who">読み込み中…</div>
+<div class="latest" id="latest" hidden>
+  <img id="latestImg" alt="">
+  <div><div class="lb">最新の抽選結果</div><div class="lno" id="latestNo"></div></div>
+  <div class="lc">抽選済み <b id="drawnCnt">0</b> / 151</div>
+</div>
+<div class="board" id="board"></div>
+<div class="stat"><span>穴：<b id="cnt">1</b>/25</span><span class="badge" id="reach"></span></div>
+<div class="note" id="note"></div>
+<div class="sim" id="sim" hidden>
+  デモ用：抽選機シミュレーター（Firebase未設定のときだけ表示されます）<br>
+  <button id="d1">1匹抽選</button><button id="d2">自分のシートから抽選</button><button id="rs">リセット</button>
+  <div class="drawn" id="drawn"></div>
+</div>
+<div id="toast"></div>
+<div id="ov"><h2>BINGO!</h2><p>タップで閉じる</p></div>
+<canvas id="cv"></canvas>
+
+<script type="module">
+/* ============================================================
+   設定
+   ============================================================ */
+const CONFIG = {
+  LIFF_ID: 'https://liff.line.me/2012567719-k5YCcfr3',                                 // LINE Developers で発行したLIFF ID
+  API_URL: 'https://script.google.com/macros/s/AKfycbyDDfXUvPJe5Ai30MLwnJ23WdOmCgUtjD-sgr9eVB8EC4qA74TFDgVyWu7YJWpzVslUtA/exec',                                 // GASのウェブアプリURL（…/exec）
+  IMAGE_BASE: './data/pic/',                   // ポケモン画像の場所（例: 'https://ユーザー名.github.io/リポジトリ名/data/pic/'）
+  IMAGE_EXT: '.png',                           // 画像は 1.png, 2.png … の形式
+  FIREBASE: {                                  // 抽選機に貼ったものと同じ値
+    apiKey: "AIzaSyAenxvQQLc_2LAzayWXfE97lMr-mFqdtrk",
+    authDomain: "pcst-alumni-reunion.firebaseapp.com",
+    databaseURL: "https://pcst-alumni-reunion-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "pcst-alumni-reunion",
+    storageBucket: "pcst-alumni-reunion.firebasestorage.app",
+    messagingSenderId: "167272759038",
+    appId: "1:167272759038:web:d34c428e0b10af0bd02faf"
+  }
+};
+
+const TOTAL = 151, FREE = 12;
+const LINES = [
+  ...[0,1,2,3,4].map(r => [0,1,2,3,4].map(c => r * 5 + c)),
+  ...[0,1,2,3,4].map(c => [0,1,2,3,4].map(r => r * 5 + c)),
+  [0,6,12,18,24], [4,8,12,16,20]
+];
+const USE_FIREBASE = !!CONFIG.FIREBASE.apiKey;
+const USE_GAS = !!CONFIG.API_URL;
+
+const $ = id => document.getElementById(id);
+const imgSrc = n => CONFIG.IMAGE_BASE + n + CONFIG.IMAGE_EXT;
+const store = {
+  get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ---------- 状態 ---------- */
+let userId = 'demo', userName = '';
+let sheet = [];                       // 25マス（0 = FREE）
+let punched = new Set([FREE]);        // 穴をあけたマスの位置
+let punchedRound = null;              // 穴あけ状態がどの回のものか
+let drawn = [], drawnSet = new Set(); // 抽選済み（Firebase or デモ）
+let celebrated = 0;
+let sheetLoaded = false;
+let baseline = false;                 // 最初の受信では通知しない
+const cells = [];
+
+/* ============================================================
+   GAS API
+   ============================================================ */
+async function api(action, body){
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 12000);
+  try{
+    // text/plain にするとCORSのプリフライトが発生しない（GASの定番）
+    const res = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action, ...body }),
+      signal: ctl.signal
+    });
+    const data = await res.json();
+    if(data.error) throw new Error(data.error);
+    return data;
+  }finally{ clearTimeout(t); }
+}
+
+/* ---------- 保存（穴あけ状態 → GAS） ---------- */
+let dirty = false, syncing = false, syncTimer = null;
+const SAVE_TEXT = { pending:'保存待ち…', saving:'保存中…', saved:'✓ 保存済み', error:'⚠ 通信エラー（自動で再試行します）' };
+function setSave(state){
+  if(!USE_GAS) return;
+  const n = $('note');
+  n.textContent = SAVE_TEXT[state] || '';
+  n.className = 'note' + (state === 'error' ? ' err' : '');
+}
+function markDirty(){
+  if(!USE_GAS) return;
+  dirty = true; setSave('pending');
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(doSync, 300);
+}
+async function doSync(){
+  if(!USE_GAS || syncing || !dirty || !sheetLoaded) return;
+  syncing = true; dirty = false; setSave('saving');
+  let failed = false;
+  try{
+    await api('punch', { userId, round: punchedRound, punched: [...punched].filter(i => i !== FREE) });
+    if(!dirty) setSave('saved');
+  }catch(e){
+    console.error(e); failed = true; dirty = true; setSave('error');
+  }
+  syncing = false;
+  if(dirty){ clearTimeout(syncTimer); syncTimer = setTimeout(doSync, failed ? 4000 : 300); }
+}
+window.addEventListener('online', () => { if(dirty) doSync(); });
+document.addEventListener('visibilitychange', () => { if(!document.hidden && dirty) doSync(); });
+
+/* ---------- 端末キャッシュ（すぐ表示するため。正はGAS側） ---------- */
+const cacheKey = () => 'pokebingo_v2_' + userId;
+function persistLocal(){
+  if(sheet.length) store.set(cacheKey(), { sheet, punched: [...punched], round: punchedRound });
+}
+
+/* ============================================================
+   画面
+   ============================================================ */
+function makePic(no){
+  const img = new Image();
+  img.className = 'pic'; img.alt = 'No.' + no; img.decoding = 'async';
+  img.addEventListener('error', () => {      // 画像が読めないときは色つきの丸＋番号
+    const f = document.createElement('div');
+    f.className = 'face'; f.textContent = no;
+    f.style.background = 'hsl(' + (no * 47 % 360) + ',65%,55%)';
+    img.replaceWith(f);
+  });
+  img.src = imgSrc(no);
+  return img;
+}
+
+function buildBoard(){
+  const b = $('board');
+  b.innerHTML = ''; cells.length = 0;
+  sheet.forEach((no, i) => {
+    const d = document.createElement('div');
+    d.className = 'cell'; d.dataset.i = i;
+    if(i === FREE || no === 0){
+      d.classList.add('free'); d.textContent = 'FREE';
+    }else{
+      d.dataset.n = no;
+      const s = document.createElement('span');
+      s.className = 'no'; s.textContent = no;
+      d.append(s, makePic(no));
+    }
+    const h = document.createElement('div'); h.className = 'hole'; d.appendChild(h);
+    b.appendChild(d); cells.push(d);
+  });
+}
+
+const doneLines = () => LINES.filter(l => l.every(i => punched.has(i)));
+
+function render(){
+  if(!cells.length) return;
+  const lines = doneLines();
+  const win = new Set(lines.flat());
+  cells.forEach((d, i) => {
+    d.classList.toggle('win', win.has(i));
+    if(i === FREE) return;
+    const p = punched.has(i);
+    d.classList.toggle('punched', p);
+    d.classList.toggle('can', !p && drawnSet.has(sheet[i]));
+  });
+  $('cnt').textContent = punched.size;
+  const reach = LINES.some(l => !l.every(i => punched.has(i)) && l.filter(i => punched.has(i)).length === 4);
+  $('reach').textContent = lines.length ? lines.length + 'ライン達成！' : reach ? 'リーチ！' : '';
+  if(!USE_FIREBASE) $('drawn').textContent = '抽選済み：' + (drawn.join(', ') || 'まだありません');
+}
+
+function renderLatest(){
+  const box = $('latest');
+  $('drawnCnt').textContent = drawn.length;
+  if(!drawn.length){ box.hidden = true; return; }
+  const n = drawn[drawn.length - 1];
+  box.hidden = false;
+  $('latestNo').textContent = 'No.' + String(n).padStart(3, '0');
+  const img = $('latestImg');
+  img.style.display = '';
+  img.onerror = () => { img.style.display = 'none'; };
+  img.src = imgSrc(n);
+}
+
+let toastTimer = null;
+function toast(msg){
+  const t = $('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('on'), 2600);
+}
+
+/* ---------- 穴をあける ---------- */
+$('board').addEventListener('click', e => {
+  const d = e.target.closest('.cell');
+  if(!d || !d.classList.contains('can')) return;
+  punch(Number(d.dataset.i));
+});
+
+function punch(i){
+  if(punched.has(i) || !drawnSet.has(sheet[i])) return;   // 抽選済みでなければ押せない
+  punched.add(i);
+  cells[i].classList.add('anim');
+  persistLocal(); markDirty(); render();
+  const n = doneLines().length;
+  if(n > celebrated){ celebrated = n; setTimeout(bingo, 450); }
+}
+
+/* ============================================================
+   抽選結果の受信（Firebase）
+   ============================================================ */
+function applyRound(newRound){
+  // 管理者がリセットした（回が変わった）→ 穴あけ状態をクリア
+  if(punchedRound !== null && String(punchedRound) !== String(newRound)){
+    punched = new Set([FREE]); celebrated = 0; baseline = false;
+    persistLocal(); markDirty();
+  }
+  punchedRound = newRound;
+}
+
+function onState(s){
+  const newRound = s.round || 0;
+  const list = (Array.isArray(s.drawn) ? s.drawn : []).filter(n => Number.isInteger(n) && n >= 1 && n <= TOTAL);
+  applyRound(newRound);
+
+  const added = list.filter(n => !drawnSet.has(n));
+  drawn = list; drawnSet = new Set(list);
+  render(); renderLatest();
+
+  if(baseline && added.length) notifyNew(added);
+  baseline = true;
+}
+
+function notifyNew(added){
+  const mine = added.filter(n => sheet.includes(n));
+  mine.forEach(n => {
+    const el = cells[sheet.indexOf(n)];
+    if(!el) return;
+    el.classList.add('fresh');
+    setTimeout(() => el.classList.remove('fresh'), 1900);
+  });
+  if(mine.length){
+    toast('No.' + mine[mine.length - 1] + ' が出ました！\nあなたのカードにあります');
+    try{ if(navigator.vibrate) navigator.vibrate(120); }catch(e){}
+  }
+}
+
+function startFirebase(){
+  return new Promise(async resolve => {
+    const timer = setTimeout(resolve, 6000);     // 繋がらなくてもカードは表示する
+    try{
+      const base = 'https://www.gstatic.com/firebasejs/10.14.1/';
+      const [{ initializeApp }, { getDatabase, ref, onValue }] = await Promise.all([
+        import(base + 'firebase-app.js'), import(base + 'firebase-database.js')
+      ]);
+      const db = getDatabase(initializeApp(CONFIG.FIREBASE));
+      let first = true;
+      onValue(ref(db, 'bingo/state'), snap => {
+        onState(snap.val() || { round: 0, drawn: [] });
+        if(first){ first = false; clearTimeout(timer); resolve(); }
+      }, err => { console.error(err); resolve(); });
+    }catch(e){
+      console.error(e); clearTimeout(timer); resolve();
+    }
+  });
+}
+
+/* ============================================================
+   カードの読み込み
+   ============================================================ */
+function makeLocalCard(){
+  const pool = Array.from({ length: TOTAL }, (_, i) => i + 1);
+  for(let i = pool.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const nums = pool.slice(0, 24);
+  nums.splice(FREE, 0, 0);
+  return nums;
+}
+
+async function loadSheet(){
+  // 失敗しても、成功するまで自動で再試行する
+  for(;;){
+    try{
+      const s = await api('getSheet', { userId, name: userName, round: punchedRound });
+      const server = new Set(s.punched || []);
+      // 端末に未保存の穴あけがあれば合流（同じ回のときだけ）
+      let merged = new Set(server), needSync = false;
+      if(punchedRound !== null && String(punchedRound) === String(s.round)){
+        punched.forEach(i => { if(i !== FREE && !server.has(i)){ merged.add(i); needSync = true; } });
+      }
+      sheet = s.sheet;
+      punched = new Set([FREE, ...merged]);
+      if(s.round !== null && s.round !== undefined) punchedRound = s.round;
+      sheetLoaded = true;
+      celebrated = doneLines().length;        // 読み込み時にビンゴ演出は出さない
+      buildBoard(); render(); persistLocal();
+      $('who').textContent = userName ? userName + ' さんのシート' : 'あなたのシート';
+      $('note').textContent = ''; $('note').className = 'note';
+      if(needSync) markDirty(); else setSave('saved');
+      if(dirty) doSync();
+      return;
+    }catch(e){
+      console.error(e);
+      if(!sheet.length) $('who').textContent = '読み込みに失敗しました。再試行しています…';
+      else setSave('error');
+      await sleep(4000);
+    }
+  }
+}
+
+/* ============================================================
+   LIFF
+   ============================================================ */
+function loadScript(src){
+  return new Promise((ok, ng) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = ok; s.onerror = ng;
+    document.head.appendChild(s);
+  });
+}
+async function setupUser(){
+  if(CONFIG.LIFF_ID){
+    await loadScript('https://static.line-scdn.net/liff/edge/2/sdk.js');
+    await liff.init({ liffId: CONFIG.LIFF_ID });
+    if(!liff.isLoggedIn()){ liff.login(); return false; }
+    const p = await liff.getProfile();
+    userId = p.userId; userName = p.displayName;
+    $('who').textContent = userName + ' さんのシート';
+  }else{
+    $('who').textContent = 'デモモード';
+  }
+  return true;
+}
+
+async function init(){
+  try{
+    if(!(await setupUser())) return;
+
+    // 1) 端末キャッシュがあれば、まずそれで即表示
+    const cache = store.get(cacheKey());
+    if(cache && Array.isArray(cache.sheet) && cache.sheet.length === 25){
+      sheet = cache.sheet;
+      punched = new Set([FREE, ...(cache.punched || [])]);
+      punchedRound = cache.round === undefined ? null : cache.round;
+      celebrated = doneLines().length;
+      buildBoard(); render();
+    }
+
+    // 2) 抽選結果の受信を開始（最初のデータが届くまで待つ → 今の「回」が分かる）
+    if(USE_FIREBASE) await startFirebase();
+    else $('sim').hidden = false;
+
+    // 3) カードの取得（GAS）。GAS未設定のときは端末内だけで完結
+    if(USE_GAS){
+      await loadSheet();
+    }else{
+      if(!sheet.length){ sheet = makeLocalCard(); punched = new Set([FREE]); }
+      sheetLoaded = true;
+      buildBoard(); render(); persistLocal();
+    }
+    renderLatest();
+  }catch(e){
+    $('who').textContent = '読み込みに失敗しました';
+    console.error(e);
+  }
+}
+
+/* ============================================================
+   ビンゴ演出
+   ============================================================ */
+function bingo(){
+  $('ov').classList.add('on');
+  if(navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
+  confetti();
+}
+$('ov').onclick = () => $('ov').classList.remove('on');
+function confetti(){
+  const cv = $('cv'), x = cv.getContext('2d');
+  cv.width = innerWidth; cv.height = innerHeight;
+  const cols = ['#ffd54a', '#e8453c', '#4aa8ff', '#5ad27a', '#c06bff'];
+  const ps = Array.from({ length: 160 }, () => ({
+    x: Math.random() * cv.width, y: -20 - Math.random() * cv.height * .5,
+    vx: Math.random() * 4 - 2, vy: Math.random() * 3 + 2,
+    s: Math.random() * 8 + 4, r: Math.random() * 6, c: cols[Math.random() * 5 | 0]
+  }));
+  let t = 0;
+  (function f(){
+    x.clearRect(0, 0, cv.width, cv.height);
+    ps.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.r += .1;
+      x.save(); x.translate(p.x, p.y); x.rotate(p.r);
+      x.fillStyle = p.c; x.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); x.restore();
+    });
+    if(++t < 260) requestAnimationFrame(f); else x.clearRect(0, 0, cv.width, cv.height);
+  })();
+}
+
+/* ============================================================
+   デモ用シミュレーター（Firebase未設定のときだけ有効）
+   ============================================================ */
+let demoRound = Date.now();
+function demoDraw(own){
+  const base = own ? sheet.filter(n => n) : Array.from({ length: TOTAL }, (_, i) => i + 1);
+  const pool = base.filter(n => !drawnSet.has(n));
+  if(!pool.length) return;
+  onState({ round: demoRound, drawn: [...drawn, pool[Math.random() * pool.length | 0]] });
+}
+$('d1').onclick = () => demoDraw(false);
+$('d2').onclick = () => demoDraw(true);
+$('rs').onclick = () => { demoRound = Date.now(); onState({ round: demoRound, drawn: [] }); };
+
+init();
+</script>
+</body></html>
