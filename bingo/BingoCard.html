@@ -58,11 +58,23 @@ h1{font-size:18px;margin:4px 0 2px;text-align:center}
 #ov p{color:#fff;margin:8px 0 0;font-size:14px}
 @keyframes pop{0%{transform:scale(0) rotate(-20deg)}60%{transform:scale(1.3) rotate(6deg)}100%{transform:scale(1) rotate(0)}}
 canvas{position:fixed;inset:0;pointer-events:none;z-index:11}
+.why{margin:0 0 10px;padding:8px 10px;border:1px solid var(--accent);border-radius:10px;font-size:12px;line-height:1.6;color:var(--ink);background:var(--card);word-break:break-all}
+.why[hidden]{display:none}
+.why .wh{font-weight:700;color:var(--accent)}
+.why .hint{color:var(--sub)}
+.why button{margin-top:6px;font:inherit;font-size:12px;padding:5px 12px;border-radius:8px;border:1px solid var(--line);background:var(--cell);color:var(--ink)}
+#logBtn{position:fixed;left:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:20;font:700 11px/1 monospace;padding:8px 10px;border-radius:8px;border:1px solid #888;background:rgba(0,0,0,.7);color:#fff}
+#logPanel{position:fixed;inset:0;z-index:30;display:none;flex-direction:column;background:#111;padding:8px;padding-top:calc(8px + env(safe-area-inset-top,0px));padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+#logPanel .bar{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+#logPanel .bar span{color:#aaa;font-size:12px;margin-left:auto}
+#logPanel button{font:inherit;font-size:14px;padding:8px 14px;border-radius:8px;border:1px solid #666;background:#2b2b3a;color:#fff}
+#logPanel textarea{flex:1;width:100%;background:#000;color:#9fe39f;border:1px solid #333;border-radius:8px;font:11px/1.5 ui-monospace,Menlo,monospace;padding:8px;resize:none}
 @media (prefers-reduced-motion:reduce){.cell.can,.cell.fresh,#ov h2{animation:none}}
 </style></head>
 <body>
 <h1>ポケモンビンゴ</h1>
 <div class="sub" id="who">読み込み中…</div>
+<div class="why" id="why" hidden></div>
 <div class="latest" id="latest" hidden>
   <img id="latestImg" alt="">
   <div><div class="lb">最新の抽選結果</div><div class="lno" id="latestNo"></div></div>
@@ -86,17 +98,18 @@ canvas{position:fixed;inset:0;pointer-events:none;z-index:11}
    ============================================================ */
 const CONFIG = {
   LIFF_ID: 'https://liff.line.me/2012567719-k5YCcfr3',                                 // LINE Developers で発行したLIFF ID
-  API_URL: 'https://script.google.com/macros/s/AKfycbyDDfXUvPJe5Ai30MLwnJ23WdOmCgUtjD-sgr9eVB8EC4qA74TFDgVyWu7YJWpzVslUtA/exec',                                 // GASのウェブアプリURL（…/exec）
+  API_URL: 'https://script.google.com/macros/s/AKfycbzWyHCTHH8tnIL_Izfd2CsFoWl4SrGne_AE_6uc5JjR-IxyXJU2n5yH4MFIPf44NSCarg/exec',  // GASのウェブアプリURL（…/exec）
   IMAGE_BASE: './data/pic/',                   // ポケモン画像の場所（例: 'https://ユーザー名.github.io/リポジトリ名/data/pic/'）
   IMAGE_EXT: '.png',                           // 画像は 1.png, 2.png … の形式
+  DEBUG: false,                                // true にすると常に「LOG」ボタンを表示（URLの末尾に ?debug=1 を付けても同じ）
   FIREBASE: {                                  // 抽選機に貼ったものと同じ値
-    apiKey: "AIzaSyAenxvQQLc_2LAzayWXfE97lMr-mFqdtrk",
-    authDomain: "pcst-alumni-reunion.firebaseapp.com",
-    databaseURL: "https://pcst-alumni-reunion-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "pcst-alumni-reunion",
-    storageBucket: "pcst-alumni-reunion.firebasestorage.app",
-    messagingSenderId: "167272759038",
-    appId: "1:167272759038:web:d34c428e0b10af0bd02faf"
+    apiKey: 'AIzaSyAenxvQQLc_2LAzayWXfE97lMr-mFqdtrk',
+    authDomain: 'pcst-alumni-reunion.firebaseapp.com',
+    databaseURL: 'https://pcst-alumni-reunion-default-rtdb.asia-southeast1.firebasedatabase.app',
+    projectId: 'pcst-alumni-reunion',
+    storageBucket: 'pcst-alumni-reunion.firebasestorage.app',
+    messagingSenderId: '167272759038',
+    appId: '1:167272759038:web:d34c428e0b10af0bd02faf'
   }
 };
 
@@ -117,6 +130,123 @@ const store = {
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+/* ============================================================
+   ログ（LINE内ブラウザは開発者ツールがないため、画面上で確認できる）
+   ・エラー時は画面に「ログを表示」ボタンが出ます
+   ・URLの末尾に ?debug=1 を付けて開くと、常に左下に「LOG」ボタンが出ます（?debug=0 で解除）
+   ============================================================ */
+const LOG = [];
+let logBox = null, logPanel = null;
+
+const debugOn = (() => {
+  try{
+    const q = new URLSearchParams(location.search).get('debug');
+    if(q === '1') localStorage.setItem('pokebingo_debug', '1');
+    if(q === '0') localStorage.removeItem('pokebingo_debug');
+    return CONFIG.DEBUG || localStorage.getItem('pokebingo_debug') === '1';
+  }catch(e){ return !!CONFIG.DEBUG; }
+})();
+
+const mask = v => { v = String(v || ''); return v.length > 8 ? v.slice(0, 4) + '…' + v.slice(-3) : v; };
+function fmtData(d){
+  if(d === undefined) return '';
+  if(d instanceof Error){
+    const extra = [d.code && 'code=' + d.code, d.step && 'step=' + d.step].filter(Boolean).join(' ');
+    return d.name + ': ' + d.message + (extra ? ' (' + extra + ')' : '');
+  }
+  if(typeof d === 'string') return d;
+  try{ return JSON.stringify(d); }catch(e){ return String(d); }
+}
+function log(level, msg, data){
+  const t = new Date();
+  const ts = [t.getHours(), t.getMinutes(), t.getSeconds()].map(n => String(n).padStart(2, '0')).join(':')
+           + '.' + String(t.getMilliseconds()).padStart(3, '0');
+  const line = ts + ' [' + level + '] ' + msg + (data !== undefined ? ' ' + fmtData(data) : '');
+  LOG.push(line); if(LOG.length > 400) LOG.shift();
+  (level === 'ERR' ? console.error : level === 'WARN' ? console.warn : console.log)(line);
+  if(logBox){ logBox.value = LOG.join('\n'); logBox.scrollTop = logBox.scrollHeight; }
+}
+window.addEventListener('error', e => log('ERR', 'window.onerror', (e.message || '') + ' @' + String(e.filename || '').split('/').pop() + ':' + e.lineno));
+window.addEventListener('unhandledrejection', e => log('ERR', 'unhandledrejection', e.reason));
+
+function openLog(){
+  if(!logPanel){
+    logPanel = document.createElement('div'); logPanel.id = 'logPanel';
+    const bar = document.createElement('div'); bar.className = 'bar';
+    const mk = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.onclick = fn; return b; };
+    const info = document.createElement('span'); info.textContent = '長押しでも選択できます';
+    logBox = document.createElement('textarea'); logBox.readOnly = true;
+    bar.append(
+      mk('コピー', () => {
+        logBox.focus(); logBox.select();
+        let ok = false;
+        try{ ok = document.execCommand('copy'); }catch(e){}
+        if(!ok && navigator.clipboard) navigator.clipboard.writeText(logBox.value).then(() => toast('コピーしました'), () => {});
+        else toast(ok ? 'コピーしました' : '選択しました。長押しでコピーしてください');
+      }),
+      mk('閉じる', () => { logPanel.style.display = 'none'; }),
+      info
+    );
+    logPanel.append(bar, logBox);
+    document.body.appendChild(logPanel);
+  }
+  logBox.value = LOG.join('\n');
+  logPanel.style.display = 'flex';
+  logBox.scrollTop = logBox.scrollHeight;
+}
+if(debugOn){
+  const b = document.createElement('button');
+  b.id = 'logBtn'; b.type = 'button'; b.textContent = 'LOG'; b.onclick = openLog;
+  document.body.appendChild(b);
+}
+
+/** 処理を1ステップずつ記録する。失敗したら「どのステップか」を付けて投げ直す */
+async function step(name, fn){
+  const t0 = performance.now();
+  log('INF', name + ' …');
+  try{
+    const r = await fn();
+    log('INF', name + ' OK', Math.round(performance.now() - t0) + 'ms');
+    return r;
+  }catch(e){
+    const err = e instanceof Error ? e : new Error(typeof e === 'object' ? fmtData(e) : String(e));
+    if(!err.step) err.step = name;
+    log('ERR', name + ' 失敗', err);
+    throw err;
+  }
+}
+
+/** よくある原因を日本語で案内する */
+function explain(e){
+  if(!e) return '';
+  const m = String(e.message || e), code = String(e.code || ''), st = e.step || '';
+  if(e.name === 'AbortError') return 'GASの応答が12秒以内に返りませんでした。電波状況、またはGAS側の処理を確認してください。';
+  if(/permission[_ ]denied/i.test(m)) return 'Firebaseのルールで読み取りが拒否されています。bingo の .read が true になっているか確認してください。';
+  if(/GASの応答が不正/.test(m)) return 'GASがJSONではなくHTMLを返しています。デプロイの「アクセスできるユーザー」を「全員」にして、「新しいバージョン」で再デプロイしてください。API_URLが /exec で終わっているかも確認してください。';
+  if(/GASへ接続できません|Failed to fetch|NetworkError|Load failed/i.test(m)) return 'GASに接続できません。API_URLが正しいか、GASの公開設定が「全員」か、通信状況を確認してください。';
+  if(/^GAS: /.test(m)) return 'GAS側でエラーが返っています。Apps Scriptの「実行数」からエラー内容を確認してください。';
+  if(st === 'LIFF SDKの読み込み') return 'LIFF SDKを読み込めません。通信状況を確認してください。';
+  if(st === 'liff.init') return 'LIFF IDが正しいか、LIFFアプリの「エンドポイントURL」がこのページのURLと一致しているか（https必須）を確認してください。';
+  if(st === 'liff.getProfile') return 'LIFFアプリの設定で、Scopes の「profile」にチェックが入っているか確認してください。';
+  if(/Firebase/.test(st + m)) return 'FirebaseのdatabaseURLなど、CONFIG.FIREBASE の値を確認してください。';
+  return '';
+}
+
+/** 画面にエラーを表示（kind が同じものは上書き）。「ログを表示」ボタン付き */
+let whyKind = null;
+function showWhy(kind, e, head){
+  whyKind = kind;
+  const w = $('why'); w.hidden = false; w.textContent = '';
+  const add = (txt, cls) => { const d = document.createElement('div'); d.textContent = txt; if(cls) d.className = cls; w.appendChild(d); };
+  if(head) add(head, 'wh');
+  if(e) add('原因: ' + (e.step ? '[' + e.step + '] ' : '') + String(e.message || e));
+  const h = explain(e); if(h) add('💡 ' + h, 'hint');
+  const b = document.createElement('button');
+  b.type = 'button'; b.textContent = 'ログを表示'; b.onclick = openLog;
+  w.appendChild(b);
+}
+function hideWhy(kind){ if(whyKind === kind){ $('why').hidden = true; whyKind = null; } }
+
 /* ---------- 状態 ---------- */
 let userId = 'demo', userName = '';
 let sheet = [];                       // 25マス（0 = FREE）
@@ -133,19 +263,39 @@ const cells = [];
    ============================================================ */
 async function api(action, body){
   const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), 12000);
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const t0 = performance.now();
+  log('INF', 'GAS → ' + action);
   try{
-    // text/plain にするとCORSのプリフライトが発生しない（GASの定番）
-    const res = await fetch(CONFIG.API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action, ...body }),
-      signal: ctl.signal
-    });
-    const data = await res.json();
-    if(data.error) throw new Error(data.error);
+    let res;
+    try{
+      // text/plain にするとCORSのプリフライトが発生しない（GASの定番）
+      res = await fetch(CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action, ...body }),
+        signal: ctl.signal
+      });
+    }catch(e){
+      log('ERR', 'GAS ' + action + ': 接続できません', e);
+      if(e.name !== 'AbortError') e.message = 'GASへ接続できません（' + e.message + '）';
+      throw e;
+    }
+    const text = await res.text();
+    const ms = Math.round(performance.now() - t0);
+    let data;
+    try{ data = JSON.parse(text); }
+    catch(e){
+      log('ERR', 'GAS ' + action + ': 応答がJSONではありません', 'HTTP ' + res.status + ' / ' + ms + 'ms / 先頭: ' + text.slice(0, 160).replace(/\s+/g, ' '));
+      throw new Error('GASの応答が不正です（HTTP ' + res.status + '）');
+    }
+    if(data.error){
+      log('ERR', 'GAS ' + action + ': エラー応答', data.error);
+      throw new Error('GAS: ' + data.error);
+    }
+    log('INF', 'GAS ← ' + action + ' OK', 'HTTP ' + res.status + ' / ' + ms + 'ms');
     return data;
-  }finally{ clearTimeout(t); }
+  }finally{ clearTimeout(timer); }
 }
 
 /* ---------- 保存（穴あけ状態 → GAS） ---------- */
@@ -192,6 +342,7 @@ function makePic(no){
   const img = new Image();
   img.className = 'pic'; img.alt = 'No.' + no; img.decoding = 'async';
   img.addEventListener('error', () => {      // 画像が読めないときは色つきの丸＋番号
+    if(!makePic.warned){ makePic.warned = true; log('WARN', '画像を読み込めません（以降の分は省略）', img.src); }
     const f = document.createElement('div');
     f.className = 'face'; f.textContent = no;
     f.style.background = 'hsl(' + (no * 47 % 360) + ',65%,55%)';
@@ -317,20 +468,41 @@ function notifyNew(added){
 
 function startFirebase(){
   return new Promise(async resolve => {
-    const timer = setTimeout(resolve, 6000);     // 繋がらなくてもカードは表示する
+    const timer = setTimeout(() => {          // 繋がらなくてもカードは表示する
+      log('WARN', 'Firebase: 6秒以内に抽選データが届きませんでした（先に進みます）');
+      showWhy('fb', new Error('Firebaseからデータが届きません'), '抽選結果に接続できていません');
+      resolve();
+    }, 6000);
     try{
       const base = 'https://www.gstatic.com/firebasejs/10.14.1/';
+      log('INF', 'Firebase: モジュール読み込み …');
       const [{ initializeApp }, { getDatabase, ref, onValue }] = await Promise.all([
         import(base + 'firebase-app.js'), import(base + 'firebase-database.js')
       ]);
+      log('INF', 'Firebase: モジュール読み込み OK');
       const db = getDatabase(initializeApp(CONFIG.FIREBASE));
       let first = true;
+      onValue(ref(db, '.info/connected'), s => log('INF', 'Firebase: 接続状態', s.val() ? 'online' : 'offline'));
       onValue(ref(db, 'bingo/state'), snap => {
-        onState(snap.val() || { round: 0, drawn: [] });
-        if(first){ first = false; clearTimeout(timer); resolve(); }
-      }, err => { console.error(err); resolve(); });
+        const v = snap.val() || { round: 0, drawn: [] };
+        if(first){
+          log('INF', 'Firebase: 初回データ受信', { round: v.round, drawn: (v.drawn || []).length });
+          clearTimeout(timer);
+        }
+        hideWhy('fb');
+        onState(v);
+        if(first){ first = false; resolve(); }
+      }, err => {
+        log('ERR', 'Firebase: 購読エラー', err);
+        clearTimeout(timer);
+        showWhy('fb', err, '抽選結果に接続できていません');
+        resolve();
+      });
     }catch(e){
-      console.error(e); clearTimeout(timer); resolve();
+      log('ERR', 'Firebase: 初期化に失敗', e);
+      clearTimeout(timer);
+      showWhy('fb', e, '抽選結果に接続できていません');
+      resolve();
     }
   });
 }
@@ -351,8 +523,11 @@ function makeLocalCard(){
 
 async function loadSheet(){
   // 失敗しても、成功するまで自動で再試行する
+  let attempt = 0;
   for(;;){
+    attempt++;
     try{
+      log('INF', 'カード取得 開始（' + attempt + '回目）', { round: punchedRound });
       const s = await api('getSheet', { userId, name: userName, round: punchedRound });
       const server = new Set(s.punched || []);
       // 端末に未保存の穴あけがあれば合流（同じ回のときだけ）
@@ -366,15 +541,17 @@ async function loadSheet(){
       sheetLoaded = true;
       celebrated = doneLines().length;        // 読み込み時にビンゴ演出は出さない
       buildBoard(); render(); persistLocal();
+      log('INF', 'カード取得 完了', { cells: sheet.length, punched: punched.size, round: punchedRound, 未保存分あり: needSync });
       $('who').textContent = userName ? userName + ' さんのシート' : 'あなたのシート';
+      hideWhy('gas');
       $('note').textContent = ''; $('note').className = 'note';
       if(needSync) markDirty(); else setSave('saved');
       if(dirty) doSync();
       return;
     }catch(e){
-      console.error(e);
-      if(!sheet.length) $('who').textContent = '読み込みに失敗しました。再試行しています…';
+      if(!sheet.length) $('who').textContent = '読み込みに失敗しました。再試行しています…（' + attempt + '回目）';
       else setSave('error');
+      showWhy('gas', e);
       await sleep(4000);
     }
   }
@@ -386,26 +563,43 @@ async function loadSheet(){
 function loadScript(src){
   return new Promise((ok, ng) => {
     const s = document.createElement('script');
-    s.src = src; s.onload = ok; s.onerror = ng;
+    s.src = src; s.onload = ok;
+    s.onerror = () => ng(new Error('スクリプトを読み込めません: ' + src));
     document.head.appendChild(s);
   });
 }
 async function setupUser(){
-  if(CONFIG.LIFF_ID){
-    await loadScript('https://static.line-scdn.net/liff/edge/2/sdk.js');
-    await liff.init({ liffId: CONFIG.LIFF_ID });
-    if(!liff.isLoggedIn()){ liff.login(); return false; }
-    const p = await liff.getProfile();
-    userId = p.userId; userName = p.displayName;
-    $('who').textContent = userName + ' さんのシート';
-  }else{
+  if(!CONFIG.LIFF_ID){
+    log('WARN', 'LIFF_ID が未設定 → デモモード（ユーザーIDは固定の demo）');
     $('who').textContent = 'デモモード';
+    return true;
   }
+  await step('LIFF SDKの読み込み', () => loadScript('https://static.line-scdn.net/liff/edge/2/sdk.js'));
+  if(typeof liff === 'undefined') throw Object.assign(new Error('liff オブジェクトが見つかりません'), { step: 'LIFF SDKの読み込み' });
+  await step('liff.init', () => liff.init({ liffId: CONFIG.LIFF_ID }));
+  try{
+    log('INF', 'LIFF情報', { os: liff.getOS(), isInClient: liff.isInClient(), lang: liff.getLanguage(), ver: liff.getVersion(), loggedIn: liff.isLoggedIn() });
+  }catch(e){ log('WARN', 'LIFF情報の取得に失敗', e); }
+  if(!liff.isLoggedIn()){
+    log('INF', '未ログイン → liff.login() で遷移します');
+    liff.login();
+    return false;
+  }
+  const p = await step('liff.getProfile', () => liff.getProfile());
+  userId = p.userId; userName = p.displayName;
+  log('INF', 'ユーザー', { userId: mask(userId), name: userName });
+  $('who').textContent = userName + ' さんのシート';
   return true;
 }
 
 async function init(){
   try{
+    log('INF', '起動', {
+      page: location.origin + location.pathname,
+      queryKeys: [...new URLSearchParams(location.search).keys()],
+      設定: { LIFF_ID: !!CONFIG.LIFF_ID, API_URL: USE_GAS ? '…' + CONFIG.API_URL.slice(-8) : '未設定', FIREBASE: USE_FIREBASE, IMAGE_BASE: CONFIG.IMAGE_BASE },
+      ua: navigator.userAgent
+    });
     if(!(await setupUser())) return;
 
     // 1) 端末キャッシュがあれば、まずそれで即表示
@@ -416,24 +610,33 @@ async function init(){
       punchedRound = cache.round === undefined ? null : cache.round;
       celebrated = doneLines().length;
       buildBoard(); render();
+      log('INF', '端末キャッシュから先に表示', { punched: punched.size, round: punchedRound });
+    }else{
+      log('INF', '端末キャッシュなし');
     }
 
     // 2) 抽選結果の受信を開始（最初のデータが届くまで待つ → 今の「回」が分かる）
     if(USE_FIREBASE) await startFirebase();
-    else $('sim').hidden = false;
+    else{
+      log('WARN', 'Firebase未設定 → デモ用シミュレーターを表示');
+      $('sim').hidden = false;
+    }
 
     // 3) カードの取得（GAS）。GAS未設定のときは端末内だけで完結
     if(USE_GAS){
       await loadSheet();
     }else{
+      log('WARN', 'API_URL が未設定 → カードは端末内のみに保存されます');
       if(!sheet.length){ sheet = makeLocalCard(); punched = new Set([FREE]); }
       sheetLoaded = true;
       buildBoard(); render(); persistLocal();
     }
     renderLatest();
+    log('INF', '初期化完了');
   }catch(e){
+    log('ERR', '初期化に失敗', e);
     $('who').textContent = '読み込みに失敗しました';
-    console.error(e);
+    showWhy('init', e);
   }
 }
 
