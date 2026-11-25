@@ -303,6 +303,32 @@
   }
   .list-count b{ color:var(--gold); font-size:19px; }
 
+  /* ---------- まとめて抽選 ---------- */
+  .batch{ display:flex; border:1px solid #3a3f52; border-radius:12px; overflow:hidden; }
+  .batch button{
+    background:transparent; color:var(--muted); border:none; border-radius:0;
+    padding:17px 20px; font-size:18px; letter-spacing:.04em;
+  }
+  .batch button + button{ border-left:1px solid #3a3f52; }
+  .batch button:hover:not(:disabled){ color:var(--cream); }
+  .batch button.on{ background:var(--gold); color:#241a08; }
+  .batch button:disabled{ cursor:not-allowed; opacity:.5; }
+  .batch button.on:disabled{ opacity:.85; }
+
+  .dex-window{ transition:width .3s ease; max-width:100%; }
+  .dex-window[data-batch="3"]{ width:min(620px, calc(100vw - 140px)); }
+  .dex-window[data-batch="5"]{ width:min(820px, calc(100vw - 140px)); }
+
+  .ball-scenes{ position:absolute; inset:0; display:flex; }
+  .ball-scenes .ball-scene{ position:relative; inset:auto; flex:1 1 0; min-width:0; height:100%; }
+  .dex-window:not([data-batch="1"]) .ball-wrap{ width:72%; }
+  .dex-window:not([data-batch="1"]) .mon img{ width:78%; }
+  .dex-window[data-batch="3"] .mon .mname{ font-size:24px; }
+  .dex-window[data-batch="3"] .mon .mno{ font-size:13px; }
+  .dex-window[data-batch="5"] .mon .mname{ font-size:19px; }
+  .dex-window[data-batch="5"] .mon .mno{ font-size:12px; }
+  .dex-window:not([data-batch="1"]) .ball-scene.img-missing .mon .mname{ font-size:22px; }
+
   /* ---------- Poké Ball演出 ---------- */
   .reel-strip{ height:100%; }
   .ball-scene{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
@@ -339,26 +365,28 @@
   }
   .mon{
     position:absolute; inset:0; z-index:3;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
   }
-  .mon img{ width:70%; aspect-ratio:1; object-fit:contain; filter:drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
-  .mon span{ font-family:var(--disp); font-size:24px; color:var(--gold); letter-spacing:.06em; }
+  .mon img{ width:60%; aspect-ratio:1; object-fit:contain; filter:drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
+  .mon .mname{ font-family:'Yu Gothic','Hiragino Kaku Gothic ProN','Meiryo',sans-serif; font-weight:800; font-size:30px; color:var(--cream); letter-spacing:.04em; white-space:nowrap; text-shadow:0 2px 6px rgba(0,0,0,.6); }
+  .mon .mno{ font-family:var(--disp); font-size:15px; color:var(--gold); letter-spacing:.08em; }
   .ball-scene.img-missing .mon img{ display:none; }
-  .ball-scene.img-missing .mon span{ font-size:44px; }
+  .ball-scene.img-missing .mon .mname{ font-size:34px; }
+  .ball-scene.img-missing .mon .mno{ font-size:22px; }
 
   /* 待機中: ボールがゆらゆら浮く */
   .ball-scene.idle .ball-wrap{ animation:idle-float 2.6s ease-in-out infinite; }
   @keyframes idle-float{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-6px); } }
 
   /* 抽選中のタイムライン（全体 約2.6秒） */
-  .ball-scene.run .ball-wrap{ animation:ball-drop .45s ease-out both; }
-  .ball-scene.run .ball{ animation:ball-shake .9s .5s ease-in-out, ball-out .35s 1.95s forwards; }
-  .ball-scene.run .half.top{ animation:open-top .35s 1.5s cubic-bezier(.2,1.5,.4,1) forwards; }
-  .ball-scene.run .half.bottom{ animation:open-bottom .35s 1.5s ease-out forwards; }
-  .ball-scene.run .ball-btn{ animation:btn-off .35s 1.2s ease-in forwards; }
-  .ball-scene.run .burst{ animation:burst .8s 1.5s ease-out both; }
-  .ball-scene.run .mon img{ animation:mon-in .7s 1.55s cubic-bezier(.2,.9,.3,1.1) both; }
-  .ball-scene.run .mon span{ animation:name-in .3s 2.1s both; }
+  .ball-scene.run .ball-wrap{ animation:ball-drop .45s var(--d,0s) ease-out both; }
+  .ball-scene.run .ball{ animation:ball-shake .9s calc(.5s + var(--d,0s)) ease-in-out, ball-out .35s calc(1.95s + var(--d,0s)) forwards; }
+  .ball-scene.run .half.top{ animation:open-top .35s calc(1.5s + var(--d,0s)) cubic-bezier(.2,1.5,.4,1) forwards; }
+  .ball-scene.run .half.bottom{ animation:open-bottom .35s calc(1.5s + var(--d,0s)) ease-out forwards; }
+  .ball-scene.run .ball-btn{ animation:btn-off .35s calc(1.2s + var(--d,0s)) ease-in forwards; }
+  .ball-scene.run .burst{ animation:burst .8s calc(1.5s + var(--d,0s)) ease-out both; }
+  .ball-scene.run .mon img{ animation:mon-in .7s calc(1.55s + var(--d,0s)) cubic-bezier(.2,.9,.3,1.1) both; }
+  .ball-scene.run .mon span{ animation:name-in .3s calc(2.1s + var(--d,0s)) both; }
 
   @keyframes ball-drop{ 0%{ transform:translateY(-70%); opacity:0; } 60%{ opacity:1; } 100%{ transform:translateY(0); opacity:1; } }
   @keyframes ball-shake{
@@ -439,6 +467,11 @@
 
   <div class="controls">
     <button id="muteBtn" title="音のオン/オフ">🔊</button>
+    <div class="batch" id="batch" role="group" aria-label="まとめて抽選する数">
+      <button type="button" data-n="1">1匹</button>
+      <button type="button" data-n="3">3匹</button>
+      <button type="button" data-n="5">5匹</button>
+    </div>
     <button id="drawBtn">抽選する</button>
     <button id="resetBtn">リセット</button>
   </div>
@@ -467,6 +500,8 @@
 <script>
 (function(){
   const MIN = 1, MAX = 151;
+  const NAMES = ['', 'フシギダネ', 'フシギソウ', 'フシギバナ', 'ヒトカゲ', 'リザード', 'リザードン', 'ゼニガメ', 'カメール', 'カメックス', 'キャタピー', 'トランセル', 'バタフリー', 'ビードル', 'コクーン', 'スピアー', 'ポッポ', 'ピジョン', 'ピジョット', 'コラッタ', 'ラッタ', 'オニスズメ', 'オニドリル', 'アーボ', 'アーボック', 'ピカチュウ', 'ライチュウ', 'サンド', 'サンドパン', 'ニドラン♀', 'ニドリーナ', 'ニドクイン', 'ニドラン♂', 'ニドリーノ', 'ニドキング', 'ピッピ', 'ピクシー', 'ロコン', 'キュウコン', 'プリン', 'プクリン', 'ズバット', 'ゴルバット', 'ナゾノクサ', 'クサイハナ', 'ラフレシア', 'パラス', 'パラセクト', 'コンパン', 'モルフォン', 'ディグダ', 'ダグトリオ', 'ニャース', 'ペルシアン', 'コダック', 'ゴルダック', 'マンキー', 'オコリザル', 'ガーディ', 'ウインディ', 'ニョロモ', 'ニョロゾ', 'ニョロボン', 'ケーシィ', 'ユンゲラー', 'フーディン', 'ワンリキー', 'ゴーリキー', 'カイリキー', 'マダツボミ', 'ウツドン', 'ウツボット', 'メノクラゲ', 'ドククラゲ', 'イシツブテ', 'ゴローン', 'ゴローニャ', 'ポニータ', 'ギャロップ', 'ヤドン', 'ヤドラン', 'コイル', 'レアコイル', 'カモネギ', 'ドードー', 'ドードリオ', 'パウワウ', 'ジュゴン', 'ベトベター', 'ベトベトン', 'シェルダー', 'パルシェン', 'ゴース', 'ゴースト', 'ゲンガー', 'イワーク', 'スリープ', 'スリーパー', 'クラブ', 'キングラー', 'ビリリダマ', 'マルマイン', 'タマタマ', 'ナッシー', 'カラカラ', 'ガラガラ', 'サワムラー', 'エビワラー', 'ベロリンガ', 'ドガース', 'マタドガス', 'サイホーン', 'サイドン', 'ラッキー', 'モンジャラ', 'ガルーラ', 'タッツー', 'シードラ', 'トサキント', 'アズマオウ', 'ヒトデマン', 'スターミー', 'バリヤード', 'ストライク', 'ルージュラ', 'エレブー', 'ブーバー', 'カイロス', 'ケンタロス', 'コイキング', 'ギャラドス', 'ラプラス', 'メタモン', 'イーブイ', 'シャワーズ', 'サンダース', 'ブースター', 'ポリゴン', 'オムナイト', 'オムスター', 'カブト', 'カブトプス', 'プテラ', 'カビゴン', 'フリーザー', 'サンダー', 'ファイヤー', 'ミニリュウ', 'ハクリュー', 'カイリュー', 'ミュウツー', 'ミュウ'];   // 番号 → 名前（初代151匹）
+  const nameOf = n => NAMES[n] || ('No.' + n);
   const MASTER_BALL_NUMBERS = [150, 151]; // マスターボールで登場させるポケモン番号（ミュウツー・ミュウ）
 
   // ==== 画像パス設定 ====
@@ -498,6 +533,10 @@
   let muted = false;
   let audioCtx = null;
   let resetToken = 0; // インクリメントすることで進行中の抽選を無効化する
+  let batchSize = 1;  // 1回の抽選で出す数（1 / 3 / 5）
+  let lastBatch = 1;  // 直前の抽選で出した数（履歴の強調表示に使う）
+  const STAGGER = 0.1; // 複数のボールを少しずつずらして開く（秒）
+  const batchEl = document.getElementById('batch');
 
   function resetState(){
     remaining = [];
@@ -527,10 +566,10 @@
 
   function renderChips(){
     chipsEl.innerHTML = '';
-    const recent = drawnHistory.slice(-10).reverse();
+    const recent = drawnHistory.slice(-Math.max(10, lastBatch)).reverse();
     recent.forEach((n, i) => {
       const chip = document.createElement('div');
-      chip.className = 'chip' + (i === 0 ? ' latest' : '');
+      chip.className = 'chip' + (i < lastBatch ? ' latest' : '');
       chip.innerHTML =
         '<img src="' + imgSrc(n) + '" alt="" onerror="this.style.display=\'none\'">' +
         '<span>' + padNo(n) + '</span>';
@@ -590,43 +629,62 @@
   function landSound(){ beep(660, 0.18, 0.07, 'triangle'); setTimeout(() => beep(880, 0.22, 0.06, 'triangle'), 90); }
 
   // --- モンスターボール演出 ---
-  function sceneMarkup(n, mode){
+  function sceneMarkup(n, mode, i){
+    i = i || 0;
     const mon = (mode === 'run')
       ? '<div class="burst"></div>' +
         '<div class="mon"><img src="' + imgSrc(n) + '" alt="' + padNo(n) + '" ' +
         'onerror="this.closest(\'.ball-scene\').classList.add(\'img-missing\')">' +
-        '<span>' + padNo(n) + '</span></div>'
+        '<span class="mname">' + nameOf(n) + '</span><span class="mno">' + padNo(n) + '</span></div>'
       : '';
     const isMaster = (mode === 'run') && MASTER_BALL_NUMBERS.indexOf(n) !== -1;
     const mMark = isMaster
-      ? '<svg class="master-deco" viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="pinkDome" cx="35%" cy="28%" r="80%"><stop offset="0" stop-color="#ff9fd2"/><stop offset=".42" stop-color="#e5429f"/><stop offset="1" stop-color="#b02a85"/></radialGradient></defs><g transform="rotate(-36 20 19)"><ellipse cx="20" cy="19" rx="18" ry="13.5" fill="url(#pinkDome)" stroke="#2c1450" stroke-width="2.2"/><ellipse cx="15" cy="14.5" rx="9" ry="3.6" fill="#ffd3ec" opacity=".6"/></g><g transform="rotate(36 80 21)"><ellipse cx="80" cy="21" rx="19" ry="15" fill="url(#pinkDome)" stroke="#2c1450" stroke-width="2.2"/><ellipse cx="74" cy="15.5" rx="10" ry="4" fill="#ffd3ec" opacity=".6"/></g><path d="M38.5 34 L41.5 15 L50 26 L58.5 15 L61.5 34" fill="none" stroke="#2c1450" stroke-width="7.5" stroke-linejoin="round" stroke-linecap="round" opacity=".45"/><path d="M38 33 L41 14 L50 25 L59 14 L62 33" fill="none" stroke="#fff" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/></svg>'
+      ? '<svg class="master-deco" viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="pinkDome' + i + '" cx="35%" cy="28%" r="80%"><stop offset="0" stop-color="#ff9fd2"/><stop offset=".42" stop-color="#e5429f"/><stop offset="1" stop-color="#b02a85"/></radialGradient></defs><g transform="rotate(-36 20 19)"><ellipse cx="20" cy="19" rx="18" ry="13.5" fill="url(#pinkDome' + i + ')" stroke="#2c1450" stroke-width="2.2"/><ellipse cx="15" cy="14.5" rx="9" ry="3.6" fill="#ffd3ec" opacity=".6"/></g><g transform="rotate(36 80 21)"><ellipse cx="80" cy="21" rx="19" ry="15" fill="url(#pinkDome' + i + ')" stroke="#2c1450" stroke-width="2.2"/><ellipse cx="74" cy="15.5" rx="10" ry="4" fill="#ffd3ec" opacity=".6"/></g><path d="M38.5 34 L41.5 15 L50 26 L58.5 15 L61.5 34" fill="none" stroke="#2c1450" stroke-width="7.5" stroke-linejoin="round" stroke-linecap="round" opacity=".45"/><path d="M38 33 L41 14 L50 25 L59 14 L62 33" fill="none" stroke="#fff" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/></svg>'
       : '';
-    return '<div class="ball-scene ' + mode + (isMaster ? ' master' : '') + '">' +
+    return '<div class="ball-scene ' + mode + (isMaster ? ' master' : '') + '" style="--d:' + (i * STAGGER).toFixed(2) + 's">' +
       '<div class="ball-wrap"><div class="ball">' +
       '<div class="half top">' + mMark + '</div><div class="half bottom"></div><div class="ball-btn"></div>' +
       '</div></div>' + mon + '</div>';
   }
 
-  function showIdleBall(){
-    reelStrip.innerHTML = sceneMarkup(0, 'idle');
+  function scenesMarkup(nums, mode){
+    return '<div class="ball-scenes">' + nums.map((n, i) => sceneMarkup(n, mode, i)).join('') + '</div>';
   }
 
-  function spinTo(finalNumber){
+  function showIdleBall(){
+    reelStrip.innerHTML = scenesMarkup(new Array(batchSize).fill(0), 'idle');
+  }
+
+  // nums: 今回出すポケモン番号の配列（1〜5個）。全部のボールが開き終わったら解決する
+  function spinTo(nums){
     return new Promise(resolve => {
-      reelStrip.innerHTML = sceneMarkup(finalNumber, 'run');
+      reelStrip.innerHTML = scenesMarkup(nums, 'run');
 
       const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if(reduce){ landSound(); setTimeout(resolve, 400); return; }
 
       swooshSound(); // ボールが落ちてくる音（クリック直後に鳴らして音声を有効化）
       [650, 1000, 1350].forEach(t => setTimeout(() => beep(260, 0.07, 0.05, 'square'), t)); // ガタガタ
-      setTimeout(landSound, 1500);                                                          // パカッ
-      if(MASTER_BALL_NUMBERS.indexOf(finalNumber) !== -1){                                  // マスターボール用の追加音
-        setTimeout(() => beep(1320, 0.35, 0.06, 'triangle'), 1650);
-        setTimeout(() => beep(1760, 0.45, 0.05, 'triangle'), 1800);
-      }
-      setTimeout(resolve, 2700);
+      nums.forEach((n, i) => {
+        const at = 1500 + i * STAGGER * 1000;
+        setTimeout(landSound, at);                                                          // パカッ
+        if(MASTER_BALL_NUMBERS.indexOf(n) !== -1){                                          // マスターボール用の追加音
+          setTimeout(() => beep(1320, 0.35, 0.06, 'triangle'), at + 150);
+          setTimeout(() => beep(1760, 0.45, 0.05, 'triangle'), at + 300);
+        }
+      });
+      setTimeout(resolve, 2700 + (nums.length - 1) * STAGGER * 1000);
     });
+  }
+
+  function updateDrawLabel(){
+    if(remaining.length === 0){ drawBtn.textContent = 'ビンゴ終了'; return; }
+    const k = Math.min(batchSize, remaining.length);
+    drawBtn.textContent = k === 1 ? '抽選する' : k + '匹まとめて抽選';
+  }
+
+  function setBatchButtonsDisabled(v){
+    batchEl.querySelectorAll('button').forEach(b => { b.disabled = v; });
   }
 
   async function handleDraw(){
@@ -635,30 +693,37 @@
     animating = true;
     const myToken = resetToken;
     drawBtn.disabled = true;
+    setBatchButtonsDisabled(true);
 
-    const idx = Math.floor(Math.random() * remaining.length);
-    const n = remaining.splice(idx, 1)[0];
+    // 残りから、重複しないように k 個を選ぶ
+    const k = Math.min(batchSize, remaining.length);
+    const picked = [];
+    for(let i = 0; i < k; i++){
+      const idx = Math.floor(Math.random() * remaining.length);
+      picked.push(remaining.splice(idx, 1)[0]);
+    }
 
-    await spinTo(n);
+    await spinTo(picked);
 
     if(myToken !== resetToken){
       // この間にリセットされていた場合は結果を反映しない
       return;
     }
 
-    drawnHistory.push(n);
-    markCellDrawn(n);
+    picked.forEach(n => { drawnHistory.push(n); markCellDrawn(n); });
+    lastBatch = picked.length;
     renderCounts();
     renderChips();
-    if(window.publishState) window.publishState(drawnHistory.slice()); // Firebaseへ送信
+    if(window.publishState) window.publishState(drawnHistory.slice()); // Firebaseへ送信（まとめて1回）
 
     animating = false;
+    setBatchButtonsDisabled(false);
     if(remaining.length === 0){
       drawBtn.disabled = true;
-      drawBtn.textContent = 'ビンゴ終了';
     }else{
       drawBtn.disabled = false;
     }
+    updateDrawLabel();
   }
 
   function handleReset(){
@@ -675,7 +740,9 @@
     renderCounts();
     renderChips();
     drawBtn.disabled = false;
-    drawBtn.textContent = '抽選する';
+    setBatchButtonsDisabled(false);
+    lastBatch = 1;
+    updateDrawLabel();
   }
 
   function toggleMute(){
@@ -697,6 +764,20 @@
   listBtn.addEventListener('click', showListPage);
   backBtn.addEventListener('click', showDrawPage);
 
+  function setBatch(n, save){
+    batchSize = n;
+    dexWindowEl.dataset.batch = String(n);
+    batchEl.querySelectorAll('button').forEach(b => b.classList.toggle('on', Number(b.dataset.n) === n));
+    if(save){ try{ localStorage.setItem('pokebingo_batch', String(n)); }catch(e){} }
+    updateDrawLabel();
+    if(!animating) showIdleBall();
+  }
+  batchEl.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if(!b || b.disabled || animating) return;
+    setBatch(Number(b.dataset.n), true);
+  });
+
   drawBtn.addEventListener('click', handleDraw);
   resetBtn.addEventListener('click', handleReset);
   muteBtn.addEventListener('click', toggleMute);
@@ -715,15 +796,15 @@
     });
     renderCounts();
     renderChips();
-    if(remaining.length === 0){
-      drawBtn.disabled = true;
-      drawBtn.textContent = 'ビンゴ終了';
-    }
+    if(remaining.length === 0) drawBtn.disabled = true;
+    updateDrawLabel();
   };
 
   resetState();
   buildGrid();
-  showIdleBall();
+  let savedBatch = 1;
+  try{ savedBatch = Number(localStorage.getItem('pokebingo_batch')) || 1; }catch(e){}
+  setBatch([1, 3, 5].indexOf(savedBatch) !== -1 ? savedBatch : 1, false);   // 前回の選択を復元（showIdleBallもここで呼ばれる）
   renderCounts();
   renderChips();
 })();
@@ -734,6 +815,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/fireba
 import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
 import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
+// ▼▼ ここをFirebaseコンソールで取得した値に差し替えてください ▼▼
 const firebaseConfig = {
   apiKey: "AIzaSyAenxvQQLc_2LAzayWXfE97lMr-mFqdtrk",
   authDomain: "pcst-alumni-reunion.firebaseapp.com",
@@ -744,6 +826,7 @@ const firebaseConfig = {
   appId: "1:167272759038:web:d34c428e0b10af0bd02faf"
 };
 const ADMIN_EMAIL = "chomechome047@gmail.com"; // Authenticationで作成した管理者のメールアドレス
+// ▲▲ ここまで ▲▲
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
@@ -752,7 +835,7 @@ const stateRef = ref(db, "bingo/state");
 let round = Date.now();
 
 try{
-  const pw = prompt("パスワードを入力してください");
+  const pw = prompt("管理者パスワードを入力してください");
   await signInWithEmailAndPassword(auth, ADMIN_EMAIL, pw);
 
   // 既存データがあれば復元（ページを開き直しても続きから再開できる）
